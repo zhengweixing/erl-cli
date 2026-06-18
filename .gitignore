@@ -19,3 +19,5 @@ logs
 rebar3.crashdump
 *~
 .DS_Store
+__pycache__
+*.pyc
