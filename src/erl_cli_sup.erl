@@ -13,4 +13,9 @@ init([]) ->
                restart => permanent,
                shutdown => 5000,
                type => worker},
-    {ok, {#{strategy => one_for_one, intensity => 5, period => 10}, [Redbug]}}.
+    Pubsub = #{id => erl_cli_pubsub,
+               start => {erl_cli_pubsub, start_link, []},
+               restart => permanent,
+               shutdown => 5000,
+               type => worker},
+    {ok, {#{strategy => one_for_one, intensity => 5, period => 10}, [Redbug, Pubsub]}}.

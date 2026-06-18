@@ -6,22 +6,41 @@ Connects to a running Erlang node that has erl_cli loaded, and sends
 commands over WebSocket. The server authenticates via ?token=<token>.
 
 Commands:
-  eval    Evaluate an Erlang expression and print the result.
-  trace   Start a redbug trace and stream formatted trace messages.
-  stop    Stop a running redbug trace.
+  eval       Evaluate an Erlang expression and print the result.
+  trace      Start a redbug trace and stream formatted trace messages.
+  stop       Stop a running redbug trace.
+  load       Upload a .beam file and hot-reload it into the remote VM via
+             code:load_binary/3. The beam is base64-encoded and sent over
+             WebSocket — no file transfer or SSH required. The module is
+             live immediately after the server responds with {"result":"ok"}.
+  subscribe  Subscribe to a pub/sub topic and stream server-pushed messages
+             until Ctrl-C. The server can push to subscribers via
+             erl_cli_pubsub:publish(Topic, Data) from application code.
+             Useful for receiving alerts, events, or agent triggers.
 
 Usage:
     python erl_cli_cli.py eval "erlang:node()" --host HOST --port PORT --token TOKEN
     python erl_cli_cli.py trace "module:function/arity" --host HOST --port PORT --token TOKEN
     python erl_cli_cli.py stop --host HOST --port PORT --token TOKEN
+    python erl_cli_cli.py load path/to/my_module.beam --host HOST --port PORT --token TOKEN
+    python erl_cli_cli.py subscribe alerts --host HOST --port PORT --token TOKEN
+
+Hot-reload workflow:
+    1. Edit and compile locally:  rebar3 compile
+    2. Upload and reload:         python erl_cli_cli.py load _build/default/lib/APP/ebin/MOD.beam ...
+    3. Verify:                    python erl_cli_cli.py eval "MOD:module_info(compile)" ...
 
 Protocol (JSON over WebSocket):
-  Request:  {"id": "<8-hex>", "code": "<erlang expression>"}
-  Response: {"id": "<8-hex>", "result": "..."}          -- eval result
-            {"id": "<8-hex>", "error": "..."}           -- eval/trace error
-            {"id": "<8-hex>", "status": "started", ...} -- trace started
-            {"id": "<8-hex>", "trace": "..."}           -- trace event
-            {"id": "<8-hex>", "done": true}             -- trace finished
+  Eval request:      {"id": "<8-hex>", "code": "<erlang expression>"}
+  Load request:      {"id": "<8-hex>", "beam": "<module>", "data": "<base64 beam>"}
+  Subscribe request: {"id": "<8-hex>", "subscribe": "<topic>"}
+  Unsubscribe:       {"id": "<8-hex>", "unsubscribe": "<topic>"}
+  Response:          {"id": "<8-hex>", "result": "..."}          -- success
+                     {"id": "<8-hex>", "error": "..."}           -- failure
+                     {"id": "<8-hex>", "status": "started", ...} -- trace started
+                     {"id": "<8-hex>", "trace": "..."}           -- trace event
+                     {"id": "<8-hex>", "done": true}             -- trace finished
+  Push (no id):      {"topic": "<topic>", "data": ...}           -- pub/sub push
 """
 
 from __future__ import annotations
@@ -73,13 +92,48 @@ class _Client:
         if self._connect_error:
             raise ConnectionError(str(self._connect_error))
 
+    def subscribe(self, topic: str) -> Iterator[str]:
+        """Subscribe to a topic and yield pushed messages until interrupted."""
+        mid = uuid.uuid4().hex[:8]
+        q = self._reg(mid)
+        self._ws.send(json.dumps({"id": mid, "subscribe": topic}))
+        # Wait for subscription ack
+        ack = self._wait(q, self.connect_timeout)
+        if "error" in ack:
+            self._unreg(mid)
+            raise RuntimeError(f"subscribe error: {ack['error']}")
+        # Stream incoming push messages for this topic via a separate listener.
+        # The server sends {"topic": "<topic>", "data": "..."} with no id,
+        # so we use a dedicated topic queue registered under the topic key.
+        self._unreg(mid)
+        tq: queue.Queue = queue.Queue()
+        with self._lock:
+            self._queues[f"topic:{topic}"] = tq
+        try:
+            while True:
+                item = tq.get()  # block indefinitely until a message arrives
+                yield item
+        finally:
+            with self._lock:
+                self._queues.pop(f"topic:{topic}", None)
+            self._ws.send(json.dumps({"id": uuid.uuid4().hex[:8], "unsubscribe": topic}))
+
     def _on_message(self, ws, message):
-        # Route incoming message to the matching per-request queue
+        # Route incoming message to the matching per-request queue.
+        # Push messages from pubsub have {"topic": "...", "data": "..."}
+        # and are routed to a queue keyed by "topic:<name>".
         try:
             item = json.loads(message)
-            msg_id = item.get("id")
         except Exception:
             return
+        if "topic" in item and "id" not in item:
+            key = f"topic:{item['topic']}"
+            with self._lock:
+                q = self._queues.get(key)
+            if q:
+                q.put(item)
+            return
+        msg_id = item.get("id")
         with self._lock:
             q = self._queues.get(msg_id)
         if q:
@@ -114,6 +168,20 @@ class _Client:
         self._unreg(mid)
         if "error" in item:
             raise RuntimeError(f"eval error: {item['error']}")
+        return item.get("result", "")
+
+    def load(self, module: str, beam_path: str, timeout: Optional[float] = None) -> str:
+        """Upload a .beam file and hot-reload it into the remote VM."""
+        import base64
+        with open(beam_path, "rb") as f:
+            data = base64.b64encode(f.read()).decode()
+        mid = uuid.uuid4().hex[:8]
+        q = self._reg(mid)
+        self._ws.send(json.dumps({"id": mid, "beam": module, "data": data}))
+        item = self._wait(q, timeout or self.default_timeout)
+        self._unreg(mid)
+        if "error" in item:
+            raise RuntimeError(f"load error: {item['error']}")
         return item.get("result", "")
 
     def trace(self, pattern: str, opts: Optional[List[tuple]] = None,
@@ -169,6 +237,26 @@ def cmd_trace(args):
             print(f"{{{args.pattern}}} => {line}", end="", flush=True)
 
 
+def cmd_subscribe(args):
+    """Subscribe to a topic and print pushed messages until Ctrl-C."""
+    print(f"Subscribing to topic '{args.topic}' (Ctrl-C to stop)...")
+    with _Client(args.host, args.port, args.path, args.token) as c:
+        try:
+            for item in c.subscribe(args.topic):
+                print(json.dumps(item), flush=True)
+        except KeyboardInterrupt:
+            pass
+
+
+def cmd_load(args):
+    """Upload a .beam file and hot-reload it on the remote node."""
+    import os
+    beam_path = args.beam
+    module = args.module or os.path.splitext(os.path.basename(beam_path))[0]
+    with _Client(args.host, args.port, args.path, args.token) as c:
+        print(f"{{code:load_binary({module}, ...)}} => {c.load(module, beam_path, timeout=args.timeout)}")
+
+
 def cmd_stop(args):
     """Stop the currently running redbug trace."""
     with _Client(args.host, args.port, args.path, args.token) as c:
@@ -190,12 +278,22 @@ def main():
     p_trace.add_argument("--time",  type=int, default=30000, help="trace duration in ms (default: 30000)")
     p_trace.add_argument("--msgs",  type=int, default=100,   help="max trace messages (default: 100)")
 
+    p_sub = sub.add_parser("subscribe", help="subscribe to a topic and stream pushed messages")
+    add_conn_args(p_sub)
+    p_sub.add_argument("topic", help="topic name to subscribe to")
+
     p_stop = sub.add_parser("stop", help="stop the redbug trace")
     add_conn_args(p_stop)
 
+    p_load = sub.add_parser("load", help="hot-reload a .beam file on the remote node")
+    add_conn_args(p_load)
+    p_load.add_argument("beam", help="path to the .beam file")
+    p_load.add_argument("--module", default="", help="module name (inferred from filename if omitted)")
+    p_load.add_argument("--timeout", type=float, default=10.0)
+
     args = parser.parse_args()
     try:
-        {"eval": cmd_eval, "trace": cmd_trace, "stop": cmd_stop}[args.cmd](args)
+        {"eval": cmd_eval, "trace": cmd_trace, "stop": cmd_stop, "load": cmd_load, "subscribe": cmd_subscribe}[args.cmd](args)
     except Exception as e:
         print(f"error: {e}", file=sys.stderr)
         sys.exit(1)

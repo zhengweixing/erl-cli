@@ -29,3 +29,13 @@ end}.
   {commented, undefined},
   {datatype, atom}
 ]}.
+
+{mapping, "erl_cli.pubsub_mod", "erl_cli.pubsub_mod", [
+  {commented, undefined},
+  {datatype, atom}
+  %% If set, all three pubsub operations are delegated to the module:
+  %%   Mod:subscribe(Topic, ConnPid) -> ok
+  %%   Mod:unsubscribe(Topic, ConnPid) -> ok
+  %%   Mod:publish(Topic, Data) -> ok
+  %% Useful for MQTT or other external message bus integration.
+]}.

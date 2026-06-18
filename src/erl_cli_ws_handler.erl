@@ -24,6 +24,16 @@ websocket_init(State) -> {ok, State}.
 
 websocket_handle({text, Data}, State) ->
     case jiffy:decode(Data, [return_maps]) of
+        #{<<"id">> := Id, <<"beam">> := Mod, <<"data">> := B64} ->
+            Self = self(),
+            spawn(fun() -> load_beam(Id, Self, Mod, B64) end),
+            {ok, State};
+        #{<<"id">> := Id, <<"subscribe">> := Topic} ->
+            erl_cli_pubsub:subscribe(Topic, self()),
+            {reply, {text, jiffy:encode(#{<<"id">> => Id, <<"result">> => <<"subscribed">>})}, State};
+        #{<<"id">> := Id, <<"unsubscribe">> := Topic} ->
+            erl_cli_pubsub:unsubscribe(Topic, self()),
+            {reply, {text, jiffy:encode(#{<<"id">> => Id, <<"result">> => <<"unsubscribed">>})}, State};
         #{<<"id">> := Id, <<"code">> := Code} ->
             Self = self(),
             spawn(fun() -> erl_cli_eval:run(Id, Self, Code) end),
@@ -34,7 +44,19 @@ websocket_handle({text, Data}, State) ->
 websocket_handle(_Frame, State) ->
     {ok, State}.
 
-websocket_info({debug_reply, Json}, State) -> {reply, {text, Json}, State};
-websocket_info(_Info, State)               -> {ok, State}.
+websocket_info({debug_reply, Json}, State)  -> {reply, {text, Json}, State};
+%% Forward pubsub push messages to the WebSocket client
+websocket_info({pubsub_push, Json}, State)  -> {reply, {text, Json}, State};
+websocket_info(_Info, State)                -> {ok, State}.
 
 terminate(_Reason, _Req, _State) -> ok.
+
+%% Load a beam binary (base64-encoded) into the VM via code:load_binary/3.
+load_beam(Id, ConnPid, ModBin, B64) ->
+    Mod = binary_to_atom(ModBin, utf8),
+    Beam = base64:decode(B64),
+    Reply = fun(Map) -> ConnPid ! {debug_reply, jiffy:encode(Map#{<<"id">> => Id})} end,
+    case code:load_binary(Mod, atom_to_list(Mod) ++ ".beam", Beam) of
+        {module, Mod} -> Reply(#{<<"result">> => <<"ok">>});
+        {error, What} -> Reply(#{<<"error">> => iolist_to_binary(io_lib:format("~p", [What]))})
+    end.
