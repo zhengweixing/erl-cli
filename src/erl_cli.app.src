@@ -1,14 +1,17 @@
 {application, erl_cli, [
-    {description, "An OTP application"},
+    {description, "Erlang remote debug via WebSocket"},
     {vsn, "0.1.0"},
     {registered, []},
     {mod, {erl_cli_app, []}},
     {applications, [
         kernel,
-        stdlib
+        stdlib,
+        jiffy,
+        cowboy,
+        recon
     ]},
     {env, []},
     {modules, []},
     {licenses, ["Apache-2.0"]},
     {links, []}
- ]}.
+]}.

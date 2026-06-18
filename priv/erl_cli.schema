@@ -1,0 +1,31 @@
+%%-*- mode: erlang -*-
+%% erl_cli Config Mapping
+
+{mapping, "erl_cli.debug", "erl_cli.debug", [
+  {default, false},
+  {datatype, {enum, [true, false]}}
+]}.
+
+{mapping, "erl_cli.token", "erl_cli.token", [
+  {default, "changeme"},
+  {datatype, string}
+]}.
+
+{translation, "erl_cli.token", fun(Conf) ->
+    list_to_binary(cuttlefish:conf_get("erl_cli.token", Conf))
+end}.
+
+{mapping, "erl_cli.port", "erl_cli.port", [
+  {commented, 8888},
+  {datatype, integer}
+]}.
+
+{mapping, "erl_cli.path", "erl_cli.path", [
+  {default, "/debug"},
+  {datatype, string}
+]}.
+
+{mapping, "erl_cli.auth_mod", "erl_cli.auth_mod", [
+  {commented, undefined},
+  {datatype, atom}
+]}.
