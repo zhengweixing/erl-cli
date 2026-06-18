@@ -1,14 +1,14 @@
 ---
 name: erl-cli
-description: Remote Erlang node diagnostics over WebSocket. Use erl_cli_cli.py to eval expressions, run redbug traces, collect recon/observer diagnostics, hot-reload beam files, and subscribe to server-pushed topics.
+description: Remote Erlang node diagnostics over WebSocket. Use erl_cli.py to eval expressions, run redbug traces, collect recon/observer diagnostics, hot-reload beam files, and subscribe to server-pushed topics.
 ---
 
 > **Agent instructions**:
-> 1. All remote operations MUST use `scripts/erl_cli_cli.py`.
+> 1. All remote operations MUST use `scripts/erl_cli.py`.
 > 2. Before any operation, ask the user for: **host**, **port**, **token**.
 > 3. After connecting, always run `eval "erlang:node()"` and `eval "nodes()"` first to confirm topology.
 
-**CLI tool**: `scripts/erl_cli_cli.py`
+**CLI tool**: `scripts/erl_cli.py`
 **Dependency**: `pip install websocket-client`
 
 ---
@@ -17,19 +17,19 @@ description: Remote Erlang node diagnostics over WebSocket. Use erl_cli_cli.py t
 
 ```bash
 # Eval
-python3 scripts/erl_cli_cli.py eval "<expr>" --host HOST --port PORT --token TOKEN
+python3 scripts/erl_cli.py eval "<expr>" --host HOST --port PORT --token TOKEN
 
 # Trace (streams until done or Ctrl-C)
-python3 scripts/erl_cli_cli.py trace "mod:fun/arity" --host HOST --port PORT --token TOKEN --time 30000 --msgs 100
+python3 scripts/erl_cli.py trace "mod:fun/arity" --host HOST --port PORT --token TOKEN --time 30000 --msgs 100
 
 # Stop trace
-python3 scripts/erl_cli_cli.py stop --host HOST --port PORT --token TOKEN
+python3 scripts/erl_cli.py stop --host HOST --port PORT --token TOKEN
 
 # Hot-reload beam (module name inferred from filename)
-python3 scripts/erl_cli_cli.py load path/to/mod.beam --host HOST --port PORT --token TOKEN
+python3 scripts/erl_cli.py load path/to/mod.beam --host HOST --port PORT --token TOKEN
 
 # Subscribe to a topic (streams until Ctrl-C)
-python3 scripts/erl_cli_cli.py subscribe <topic> --host HOST --port PORT --token TOKEN
+python3 scripts/erl_cli.py subscribe <topic> --host HOST --port PORT --token TOKEN
 ```
 
 ---
@@ -128,11 +128,11 @@ eval "os:cmd(\"ps aux | grep beam\")"
 rebar3 compile
 
 # 2. Upload and reload
-python3 scripts/erl_cli_cli.py load _build/default/lib/APP/ebin/MOD.beam \
+python3 scripts/erl_cli.py load _build/default/lib/APP/ebin/MOD.beam \
     --host HOST --port PORT --token TOKEN
 
 # 3. Verify
-python3 scripts/erl_cli_cli.py eval "MOD:module_info(compile)" \
+python3 scripts/erl_cli.py eval "MOD:module_info(compile)" \
     --host HOST --port PORT --token TOKEN
 ```
 
@@ -142,7 +142,7 @@ python3 scripts/erl_cli_cli.py eval "MOD:module_info(compile)" \
 
 ```bash
 # Agent subscribes and waits for pushed events
-python3 scripts/erl_cli_cli.py subscribe alerts --host HOST --port PORT --token TOKEN
+python3 scripts/erl_cli.py subscribe alerts --host HOST --port PORT --token TOKEN
 # Output: {"topic": "alerts", "data": {...}}
 
 # Application pushes (Erlang side)

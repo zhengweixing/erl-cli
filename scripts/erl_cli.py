@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-erl_cli_cli.py — CLI client for the erl_cli WebSocket debug channel.
+erl_cli.py — CLI client for the erl_cli WebSocket debug channel.
 
 Connects to a running Erlang node that has erl_cli loaded, and sends
 commands over WebSocket. The server authenticates via ?token=<token>.
@@ -19,16 +19,16 @@ Commands:
              Useful for receiving alerts, events, or agent triggers.
 
 Usage:
-    python erl_cli_cli.py eval "erlang:node()" --host HOST --port PORT --token TOKEN
-    python erl_cli_cli.py trace "module:function/arity" --host HOST --port PORT --token TOKEN
-    python erl_cli_cli.py stop --host HOST --port PORT --token TOKEN
-    python erl_cli_cli.py load path/to/my_module.beam --host HOST --port PORT --token TOKEN
-    python erl_cli_cli.py subscribe alerts --host HOST --port PORT --token TOKEN
+    python erl_cli.py eval "erlang:node()" --host HOST --port PORT --token TOKEN
+    python erl_cli.py trace "module:function/arity" --host HOST --port PORT --token TOKEN
+    python erl_cli.py stop --host HOST --port PORT --token TOKEN
+    python erl_cli.py load path/to/my_module.beam --host HOST --port PORT --token TOKEN
+    python erl_cli.py subscribe alerts --host HOST --port PORT --token TOKEN
 
 Hot-reload workflow:
     1. Edit and compile locally:  rebar3 compile
-    2. Upload and reload:         python erl_cli_cli.py load _build/default/lib/APP/ebin/MOD.beam ...
-    3. Verify:                    python erl_cli_cli.py eval "MOD:module_info(compile)" ...
+    2. Upload and reload:         python erl_cli.py load _build/default/lib/APP/ebin/MOD.beam ...
+    3. Verify:                    python erl_cli.py eval "MOD:module_info(compile)" ...
 
 Protocol (JSON over WebSocket):
   Eval request:      {"id": "<8-hex>", "code": "<erlang expression>"}

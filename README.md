@@ -1,6 +1,6 @@
 # erl_cli
 
-> **For AI agents**: This library provides a remote Erlang debug channel over WebSocket. Use `scripts/erl_cli_cli.py` to interact with a running Erlang node — evaluate expressions, run redbug traces, collect recon diagnostics, hot-reload beam files, and subscribe to server-pushed topics. Always ask the user for `host`, `port`, and `token` before connecting. Start with `eval "erlang:node()"` and `eval "nodes()"` to confirm connectivity and deployment topology.
+> **For AI agents**: This library provides a remote Erlang debug channel over WebSocket. Use `scripts/erl_cli.py` to interact with a running Erlang node — evaluate expressions, run redbug traces, collect recon diagnostics, hot-reload beam files, and subscribe to server-pushed topics. Always ask the user for `host`, `port`, and `token` before connecting. Start with `eval "erlang:node()"` and `eval "nodes()"` to confirm connectivity and deployment topology.
 
 Remote Erlang debug channel over WebSocket. Supports `eval`, `redbug` tracing, `recon` diagnostics, beam hot-reload, and topic pub/sub.
 
@@ -83,24 +83,24 @@ pip install websocket-client
 **Usage:**
 ```bash
 # Evaluate an Erlang expression
-python3 scripts/erl_cli_cli.py eval "erlang:node()" \
+python3 scripts/erl_cli.py eval "erlang:node()" \
     --host 127.0.0.1 --port 8888 --token your_secret_token
 
 # Start a redbug trace
-python3 scripts/erl_cli_cli.py trace "module:function/arity" \
+python3 scripts/erl_cli.py trace "module:function/arity" \
     --host 127.0.0.1 --port 8888 --token your_secret_token \
     --time 30000 --msgs 100
 
 # Stop the trace
-python3 scripts/erl_cli_cli.py stop \
+python3 scripts/erl_cli.py stop \
     --host 127.0.0.1 --port 8888 --token your_secret_token
 
 # Hot-reload a beam file (module name inferred from filename)
-python3 scripts/erl_cli_cli.py load _build/default/lib/myapp/ebin/my_module.beam \
+python3 scripts/erl_cli.py load _build/default/lib/myapp/ebin/my_module.beam \
     --host 127.0.0.1 --port 8888 --token your_secret_token
 
 # Subscribe to a topic and stream pushed messages (Ctrl-C to stop)
-python3 scripts/erl_cli_cli.py subscribe alerts \
+python3 scripts/erl_cli.py subscribe alerts \
     --host 127.0.0.1 --port 8888 --token your_secret_token
 ```
 
@@ -126,11 +126,11 @@ Upload and reload a compiled beam file without SSH or node restart:
 rebar3 compile
 
 # 2. Upload and hot-reload
-python3 scripts/erl_cli_cli.py load _build/default/lib/myapp/ebin/my_module.beam \
+python3 scripts/erl_cli.py load _build/default/lib/myapp/ebin/my_module.beam \
     --host 127.0.0.1 --port 8888 --token your_secret_token
 
 # 3. Verify
-python3 scripts/erl_cli_cli.py eval "my_module:module_info(compile)" \
+python3 scripts/erl_cli.py eval "my_module:module_info(compile)" \
     --host 127.0.0.1 --port 8888 --token your_secret_token
 ```
 
@@ -142,7 +142,7 @@ The server can push messages to subscribed clients. Useful for streaming alerts,
 
 **Subscribe from CLI (agent side):**
 ```bash
-python3 scripts/erl_cli_cli.py subscribe alerts \
+python3 scripts/erl_cli.py subscribe alerts \
     --host 127.0.0.1 --port 8888 --token your_secret_token
 # outputs: {"topic": "alerts", "data": {...}}
 ```
