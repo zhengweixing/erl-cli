@@ -20,6 +20,7 @@
 
 -export([start/1, start/2, stop/0, start_server/1, start_server/2]).
 -export([is_debug_enabled/0, get_token/0]).
+-export([start_trace/3, stop_trace/0]).
 
 -define(APP, erl_cli).
 
@@ -65,6 +66,23 @@ get_token() ->
         V when is_list(V)   -> list_to_binary(V);
         _                   -> <<>>
     end.
+
+%% ── Server-side file trace (for RPC-launched tracing, no WebSocket client) ──
+%%
+%%   erl_cli:start_trace(["mod:fun/2->return;stack"], "/tmp/trace.log",
+%%                       [{time, 60000}, {msgs, 100}]).
+%%   %% ... trigger the behaviour, then: tail -f /tmp/trace.log
+%%   erl_cli:stop_trace().
+%%
+%% Returns {ok, Procs, Funs, File} on success.
+-spec start_trace(term(), string(), list()) ->
+          {ok, integer(), integer(), string()} | {error, term()}.
+start_trace(Trace, File, Opts) ->
+    erl_cli_redbug:start_trace_file(Trace, File, Opts).
+
+-spec stop_trace() -> term().
+stop_trace() ->
+    erl_cli_redbug:stop_trace_file().
 
 set_token(Token) when is_list(Token) ->
     set_token(list_to_binary(Token));

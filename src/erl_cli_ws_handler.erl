@@ -52,11 +52,23 @@ websocket_info(_Info, State)                -> {ok, State}.
 terminate(_Reason, _Req, _State) -> ok.
 
 %% Load a beam binary (base64-encoded) into the VM via code:load_binary/3.
+%% Purge old code first so running processes on the old version are replaced.
 load_beam(Id, ConnPid, ModBin, B64) ->
     Mod = binary_to_atom(ModBin, utf8),
     Beam = base64:decode(B64),
     Reply = fun(Map) -> ConnPid ! {debug_reply, jiffy:encode(Map#{<<"id">> => Id})} end,
-    case code:load_binary(Mod, atom_to_list(Mod) ++ ".beam", Beam) of
-        {module, Mod} -> Reply(#{<<"result">> => <<"ok">>});
-        {error, What} -> Reply(#{<<"error">> => iolist_to_binary(io_lib:format("~p", [What]))})
+    try
+        code:purge(Mod),
+        case code:load_binary(Mod, atom_to_list(Mod) ++ ".beam", Beam) of
+            {module, Mod} ->
+                Reply(#{<<"result">> => iolist_to_binary(
+                    io_lib:format("hot reload success: ~p (~p bytes)", [Mod, byte_size(Beam)]))});
+            {error, What} ->
+                Reply(#{<<"error">> => iolist_to_binary(
+                    io_lib:format("load_binary failed: ~p", [What]))})
+        end
+    catch
+        Class:Err:Stack ->
+            Reply(#{<<"error">> => iolist_to_binary(
+                io_lib:format("~p:~p~n~p", [Class, Err, Stack]))})
     end.
